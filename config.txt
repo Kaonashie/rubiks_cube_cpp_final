@@ -1,0 +1,18 @@
+# Rubik's Cube Detection Configuration
+# Lines starting with # are comments
+
+# Camera Settings
+CAMERA_1_INDEX=6
+CAMERA_2_INDEX=7
+
+# Camera Resolution
+CAMERA_WIDTH=320
+CAMERA_HEIGHT=240
+CAMERA_FPS=187
+
+# Camera Optimization Settings
+EXPOSURE=25
+GAIN=10
+BRIGHTNESS=30
+CONTRAST=9
+SATURATION=60

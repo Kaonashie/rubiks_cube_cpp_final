@@ -228,19 +228,19 @@ PS3EyeCamera::PS3EyeCamera(int height, int width, int index, int fps) {
 	video_capture.open(index, cv::CAP_V4L2);
 	
 	// Set basic parameters
-	video_capture.set(cv::CAP_PROP_FRAME_WIDTH, width);
-	video_capture.set(cv::CAP_PROP_FRAME_HEIGHT, height);
-	video_capture.set(cv::CAP_PROP_FPS, fps);
-	video_capture.set(cv::CAP_PROP_BUFFERSIZE, 1); // Keep buffer small for real-time
+	// video_capture.set(cv::CAP_PROP_FRAME_WIDTH, width);
+	// video_capture.set(cv::CAP_PROP_FRAME_HEIGHT, height);
+	// video_capture.set(cv::CAP_PROP_FPS, fps);
+	// video_capture.set(cv::CAP_PROP_BUFFERSIZE, 1); // Keep buffer small for real-time
 
 	// Camera settings for stable image using config values
-	video_capture.set(cv::CAP_PROP_AUTO_WB, 1); // Disable Auto White Balance
-	video_capture.set(cv::CAP_PROP_AUTO_EXPOSURE, 0); // Disable Auto Exposure
-	video_capture.set(cv::CAP_PROP_EXPOSURE, config.exposure);
-	video_capture.set(cv::CAP_PROP_GAIN, config.gain);
-	video_capture.set(cv::CAP_PROP_BRIGHTNESS, config.brightness);
-	video_capture.set(cv::CAP_PROP_CONTRAST, config.contrast);
-	video_capture.set(cv::CAP_PROP_SATURATION, config.saturation);
+	// video_capture.set(cv::CAP_PROP_AUTO_WB, 1); // Disable Auto White Balance
+	// video_capture.set(cv::CAP_PROP_AUTO_EXPOSURE, 0); // Disable Auto Exposure
+	// video_capture.set(cv::CAP_PROP_EXPOSURE, config.exposure);
+	// video_capture.set(cv::CAP_PROP_GAIN, config.gain);
+	// video_capture.set(cv::CAP_PROP_BRIGHTNESS, config.brightness);
+	// video_capture.set(cv::CAP_PROP_CONTRAST, config.contrast);
+	// video_capture.set(cv::CAP_PROP_SATURATION, config.saturation);
 
 	if (!video_capture.isOpened()) {
 		std::cerr << "Camera " << index << " could not be opened" << std::endl;
@@ -757,7 +757,7 @@ void show_dual_camera_feed(PS3EyeCamera *camera_1, PS3EyeCamera *camera_2) {
 		}
 		
 		// Handle keyboard input with shorter delay for smoother display
-		int key = waitKey(16) & 0xFF; // ~60 FPS max display rate
+		int key = waitKey(1) & 0xFF; // ~60 FPS max display rate
 		if (key == 27 || key == 'q' || key == 'Q') { // ESC or Q
 			break;
 		}
@@ -884,8 +884,8 @@ void initializeCameras() {
 	}
 	
 	try {
-		camera_1 = new PS3EyeCamera(config.camera_height, config.camera_width, config.camera_1_index, config.camera_fps);
-		camera_2 = new PS3EyeCamera(config.camera_height, config.camera_width, config.camera_2_index, config.camera_fps);
+		camera_1 = new PS3EyeCamera(config.camera_height, config.camera_width, config.camera_1_index, 187);
+		camera_2 = new PS3EyeCamera(config.camera_height, config.camera_width, config.camera_2_index, 187);
 	} catch (const std::exception& e) {
 		std::cerr << "Error initializing cameras: " << e.what() << std::endl;
 		if (camera_1) {

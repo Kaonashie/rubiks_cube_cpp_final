@@ -231,7 +231,7 @@ make
 
 ### Code Structure
 
-The codebase follows a modular architecture with clear separation of concerns:
+The codebase follows a modular architecture with clear separation of concerns (not really but will, trust):
 
 - Camera management and configuration
 - Computer vision processing pipeline
@@ -253,4 +253,4 @@ The codebase follows a modular architecture with clear separation of concerns:
 
 ---
 
-For technical support or feature requests, please refer to the project documentation or submit an issue through the project repository.
+~~~~

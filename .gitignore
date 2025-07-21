@@ -1,10 +1,86 @@
-# Default ignored files
+# Build directories
+build/
+cmake-build-*/
+bin/
+lib/
+out/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+install_manifest.txt
+*.ninja
+build.ninja
+rules.ninja
+
+# Visual Studio / VS Code files
+.vs/
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/c_cpp_properties.json
+*.vcxproj*
+*.sln
+*.user
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+
+# Executables
+*.exe
+*.out
+*.app
+rubiks_cube_cpp_final
+
+# Object files
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# Debug files
+*.pdb
+*.ilk
+*.exp
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Configuration and calibration files (keep these for now)
+# Uncomment these lines if you want to ignore calibration data
+# pos_1.txt
+# pos_2.txt
+# range.txt
+# config.txt
+# arduino_colors.txt
+
+# Logs
+*.log
+
+# Package managers
+vcpkg/
+packages/
+node_modules/
+__pycache__/
+
+# System files
 /shelf/
 /workspace.xml
-# Editor-based HTTP Client requests
 /httpRequests/
-# Datasource local storage ignored files
 /dataSources/
-build/
-/.idea
-/.vscode
+.directory
+*.lnk

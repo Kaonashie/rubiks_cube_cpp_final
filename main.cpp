@@ -270,54 +270,94 @@ PS3EyeCamera::PS3EyeCamera(int height, int width, int index, int fps) {
 	std::cout << "Camera " << index << " initialized successfully" << std::endl;
 }
 
-void drawTargetGuide(cv::Mat& display, int face_index, int piece_index) {
-    // Draw a 3x3 grid to show piece layout
-    int grid_size = 120;
-    int start_x = display.cols - grid_size - 20;
-    int start_y = 80;
-    int cell_size = grid_size / 3;
+void draw3DCubeGuide(cv::Mat& display, int face_index, int piece_index) {
+    // Draw a small 3D cube in top-left corner (out of the way)
+    int cube_size = 80;
+    int cube_x = 20;
+    int cube_y = 20;
+    int cell_size = cube_size / 3;
     
-    // Draw grid background
-    cv::rectangle(display, cv::Point(start_x - 5, start_y - 5), 
-                  cv::Point(start_x + grid_size + 5, start_y + grid_size + 5),
-                  cv::Scalar(50, 50, 50), -1);
+    // Clear background
+    cv::rectangle(display, cv::Point(cube_x - 10, cube_y - 10), 
+                  cv::Point(cube_x + cube_size + 60, cube_y + cube_size + 40),
+                  cv::Scalar(0, 0, 0), -1);
     
-    // Draw grid lines
+    // Draw 3x3 grid for current face
     for (int i = 0; i <= 3; i++) {
-        cv::line(display, cv::Point(start_x + i * cell_size, start_y),
-                 cv::Point(start_x + i * cell_size, start_y + grid_size),
-                 cv::Scalar(200, 200, 200), 1);
-        cv::line(display, cv::Point(start_x, start_y + i * cell_size),
-                 cv::Point(start_x + grid_size, start_y + i * cell_size),
-                 cv::Scalar(200, 200, 200), 1);
+        // Vertical lines
+        cv::line(display, cv::Point(cube_x + i * cell_size, cube_y),
+                 cv::Point(cube_x + i * cell_size, cube_y + cube_size),
+                 cv::Scalar(100, 100, 100), 1);
+        // Horizontal lines  
+        cv::line(display, cv::Point(cube_x, cube_y + i * cell_size),
+                 cv::Point(cube_x + cube_size, cube_y + i * cell_size),
+                 cv::Scalar(100, 100, 100), 1);
     }
     
-    // Map piece index (0-7) to grid position (skipping center at index 4)
+    // Map piece index (0-7) to grid position (skipping center)
     int grid_positions[] = {0, 1, 2, 3, 5, 6, 7, 8}; // Skip center (4)
-    int grid_pos = grid_positions[piece_index];
-    int grid_row = grid_pos / 3;
-    int grid_col = grid_pos % 3;
+    int target_pos = grid_positions[piece_index];
+    int target_row = target_pos / 3;
+    int target_col = target_pos % 3;
     
-    // Highlight target cell
-    int cell_x = start_x + grid_col * cell_size;
-    int cell_y = start_y + grid_row * cell_size;
-    cv::rectangle(display, cv::Point(cell_x + 2, cell_y + 2),
-                  cv::Point(cell_x + cell_size - 2, cell_y + cell_size - 2),
-                  cv::Scalar(0, 255, 0), 3);
+    // Draw all squares with face color (dimmed)
+    cv::Scalar face_color;
+    switch(face_index) {
+        case 0: face_color = cv::Scalar(0, 0, 200); break;     // Front - Red (dimmed)
+        case 1: face_color = cv::Scalar(0, 200, 0); break;     // Right - Green (dimmed)
+        case 2: face_color = cv::Scalar(200, 200, 200); break; // Up - White (dimmed)
+        case 3: face_color = cv::Scalar(0, 100, 200); break;   // Back - Orange (dimmed)
+        case 4: face_color = cv::Scalar(200, 0, 0); break;     // Left - Blue (dimmed)
+        case 5: face_color = cv::Scalar(0, 200, 200); break;   // Down - Yellow (dimmed)
+        default: face_color = cv::Scalar(100, 100, 100); break;
+    }
     
-    // Draw center piece differently (blocked)
-    int center_x = start_x + 1 * cell_size;
-    int center_y = start_y + 1 * cell_size;
-    cv::rectangle(display, cv::Point(center_x + 2, center_y + 2),
-                  cv::Point(center_x + cell_size - 2, center_y + cell_size - 2),
-                  cv::Scalar(128, 128, 128), -1);
-    cv::putText(display, "X", cv::Point(center_x + cell_size/2 - 8, center_y + cell_size/2 + 8),
-                cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+    // Fill all squares with face color
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 3; col++) {
+            int x = cube_x + col * cell_size + 2;
+            int y = cube_y + row * cell_size + 2;
+            cv::rectangle(display, cv::Point(x, y), 
+                         cv::Point(x + cell_size - 4, y + cell_size - 4),
+                         face_color, -1);
+        }
+    }
     
-    // Add face label with color
-    std::string face_label = std::string(face_names[face_index]) + " (" + face_colors[face_index] + ")";
-    cv::putText(display, face_label, cv::Point(start_x, start_y - 10),
-                cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 2);
+    // Highlight target square with bright color and pulsing effect
+    int target_x = cube_x + target_col * cell_size + 2;
+    int target_y = cube_y + target_row * cell_size + 2;
+    
+    // Pulsing effect based on time
+    auto now = std::chrono::steady_clock::now();
+    auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    double pulse = 0.5 + 0.5 * sin(time_ms * 0.005); // Pulse between 0.5 and 1.0
+    
+    cv::Scalar highlight_color = cv::Scalar(0, 255 * pulse, 255); // Bright cyan/yellow pulsing
+    cv::rectangle(display, cv::Point(target_x, target_y), 
+                 cv::Point(target_x + cell_size - 4, target_y + cell_size - 4),
+                 highlight_color, -1);
+    
+    // Draw center as blocked (gray X)
+    int center_x = cube_x + 1 * cell_size + 2;
+    int center_y = cube_y + 1 * cell_size + 2;
+    cv::rectangle(display, cv::Point(center_x, center_y), 
+                 cv::Point(center_x + cell_size - 4, center_y + cell_size - 4),
+                 cv::Scalar(80, 80, 80), -1);
+    cv::line(display, cv::Point(center_x + 5, center_y + 5),
+             cv::Point(center_x + cell_size - 9, center_y + cell_size - 9),
+             cv::Scalar(200, 200, 200), 2);
+    cv::line(display, cv::Point(center_x + cell_size - 9, center_y + 5),
+             cv::Point(center_x + 5, center_y + cell_size - 9),
+             cv::Scalar(200, 200, 200), 2);
+    
+    // Add minimal text labels (small and out of the way)
+    cv::putText(display, std::string(face_names[face_index]) + " (" + face_colors[face_index] + ")", 
+                cv::Point(cube_x, cube_y + cube_size + 15),
+                cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+    
+    cv::putText(display, std::to_string(piece_index + 1) + "/8", 
+                cv::Point(cube_x, cube_y + cube_size + 30),
+                cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 0), 1);
 }
 
 void positionMouseCallback(int event, int x, int y, int flags, void *userdata) {
@@ -340,30 +380,18 @@ void positionMouseCallback(int event, int x, int y, int flags, void *userdata) {
                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
         }
         
-        // Draw target guide
-        drawTargetGuide(display, current_face, current_facelet);
+        // Draw 3D cube guide
+        draw3DCubeGuide(display, current_face, current_facelet);
         
-        // Current target info with better description
-        int total_pieces_per_face = 8; // Excluding center
-        std::string position_desc = face_positions[current_face * 8 + current_facelet];
-        std::string target_text = std::string(face_names[current_face]) + " (" + face_colors[current_face] + ") face: " + position_desc;
-        cv::putText(display, target_text, cv::Point(10, 30), 
-                   cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 255), 2);
-        
-        // Show progress for current face
-        std::string face_progress = "Face progress: " + std::to_string(current_facelet + 1) + "/8";
-        cv::putText(display, face_progress, cv::Point(10, 60), 
-                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 0), 2);
-        
-        // Show total progress (24 pieces total, 8 per face × 3 faces per camera)
-        std::string total_progress = "Total: " + std::to_string(current_click + 1) + "/24";
-        cv::putText(display, total_progress, cv::Point(10, 90), 
-                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 0), 2);
+        // Minimal progress info (small text, bottom corner)
+        std::string progress = std::to_string(current_click + 1) + "/24";
+        cv::putText(display, progress, cv::Point(display.cols - 60, display.rows - 10), 
+                   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 0), 1);
         
         cv::imshow("calibration", display);
         
-        std::cout << "✓ Saved point " << (current_click + 1) << ": (" << x << ", " << y 
-                  << ") for " << face_names[current_face] << " " << position_desc << std::endl;
+        // std::cout << "✓ Saved point " << (current_click + 1) << ": (" << x << ", " << y 
+        //           << ") for " << face_names[current_face] << " " << position_desc << std::endl;
         
         current_click++;
         current_facelet++;
@@ -420,15 +448,13 @@ bool PS3EyeCamera::calibratePosition(const std::string &filename) {
 
     std::cout << "\n=== Position Calibration ===" << std::endl;
     std::cout << "Instructions:" << std::endl;
-    std::cout << "- Click on the 8 edge/corner pieces (SKIP CENTER PIECES)" << std::endl;
-    std::cout << "- Follow the green highlight in the grid guide (right side)" << std::endl;
-    std::cout << "- Green circles show your clicks with numbers" << std::endl;
+    std::cout << "- Watch the small 3D cube guide (top-left corner)" << std::endl;
+    std::cout << "- Click the sticker that's highlighted with pulsing color" << std::endl;
+    std::cout << "- SKIP CENTER PIECES (marked with X)" << std::endl;
     std::cout << "- Press SPACE to refresh camera feed" << std::endl;
-    std::cout << "- Press 'q' to quit and save" << std::endl;
-    std::cout << "- Press 'r' to restart current face" << std::endl;
-    std::cout << "\nStarting with " << face_names[current_face] << " face..." << std::endl;
-    std::cout << "Click on the 8 edge/corner pieces of the " << face_names[current_face] 
-              << " face (center will be hardcoded)" << std::endl;
+    std::cout << "- Press 'r' to restart current face, 'q' to quit" << std::endl;
+    std::cout << "\nStarting with " << face_names[current_face] << " (" << face_colors[current_face] 
+              << ") face..." << std::endl;
 
     cv::setMouseCallback("calibration", positionMouseCallback, this);
 
@@ -444,25 +470,15 @@ bool PS3EyeCamera::calibratePosition(const std::string &filename) {
                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
         }
         
-        // Draw target guide if still calibrating
+        // Draw 3D cube guide if still calibrating
         if (current_face < 6) {
-            drawTargetGuide(display, current_face, current_facelet);
-            
-            std::string position_desc = face_positions[current_face * 8 + current_facelet];
-            std::string target_text = std::string(face_names[current_face]) + " face: " + position_desc;
-            cv::putText(display, target_text, cv::Point(10, 30), 
-                       cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 255), 2);
+            draw3DCubeGuide(display, current_face, current_facelet);
         }
         
-        // Progress info
-        std::string progress_text = "Total: " + std::to_string(current_click) + "/24";
-        cv::putText(display, progress_text, cv::Point(10, 60), 
-                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 0), 2);
-        
-        // Instructions
-        cv::putText(display, "SPACE=refresh, R=restart face, Q=quit", 
+        // Minimal instructions in bottom corner (small text)
+        cv::putText(display, "SPACE=refresh, R=restart, Q=quit", 
                    cv::Point(10, display.rows - 10), 
-                   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+                   cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
 
         cv::imshow("calibration", display);
 
@@ -679,12 +695,7 @@ void detect_cam_2() {
 
 
 void print_colors() {
-	for (auto c: glob_colors_cam_1) {
-		std::cout << c << std::endl;
-	}
-	for (auto c : glob_colors_cam_2) {
-		std::cout << c << std::endl;
-	}
+	// Silent function - no individual point output
 }
 
 void load_lut_from_file(const std::string& filename) {
@@ -1108,6 +1119,84 @@ bool validateCube() {
 	return is_valid;
 }
 
+std::string generateKociembaString() {
+	// Generate cube state string for Kociemba solver (54 characters)
+	// Kociemba expects: UURRFFDDLLBB (Up, Right, Front, Down, Left, Back)
+	// Each face: 9 positions in row-major order
+	
+	std::string cube_state(54, 'N'); // Initialize with 'N' (unknown)
+	
+	// Map our camera data to Kociemba order: U(0-8), R(9-17), F(18-26), D(27-35), L(36-44), B(45-53)
+	// Our cameras: Camera1=[Front,Right,Up], Camera2=[Back,Left,Down]
+	// Need to rearrange to: [Up,Right,Front,Down,Left,Back]
+	
+	// Kociemba indices for our detected pieces
+	// Up face (0-8) - from Camera 1 face 2
+	int up_indices[] = {0, 1, 2, 3, 5, 6, 7, 8}; // skip center at 4
+	// Right face (9-17) - from Camera 1 face 1  
+	int right_indices[] = {9, 10, 11, 12, 14, 15, 16, 17}; // skip center at 13
+	// Front face (18-26) - from Camera 1 face 0
+	int front_indices[] = {18, 19, 20, 21, 23, 24, 25, 26}; // skip center at 22
+	// Down face (27-35) - from Camera 2 face 2
+	int down_indices[] = {27, 28, 29, 30, 32, 33, 34, 35}; // skip center at 31
+	// Left face (36-44) - from Camera 2 face 1
+	int left_indices[] = {36, 37, 38, 39, 41, 42, 43, 44}; // skip center at 40
+	// Back face (45-53) - from Camera 2 face 0
+	int back_indices[] = {45, 46, 47, 48, 50, 51, 52, 53}; // skip center at 49
+	
+	// Fill Up face from Camera 1 data (our face index 2)
+	for (int i = 0; i < 8; i++) {
+		if ((16 + i) < glob_colors_cam_1.size()) {
+			cube_state[up_indices[i]] = glob_colors_cam_1[16 + i]; // Up is 3rd face for cam1
+		}
+	}
+	
+	// Fill Right face from Camera 1 data (our face index 1)
+	for (int i = 0; i < 8; i++) {
+		if ((8 + i) < glob_colors_cam_1.size()) {
+			cube_state[right_indices[i]] = glob_colors_cam_1[8 + i]; // Right is 2nd face for cam1
+		}
+	}
+	
+	// Fill Front face from Camera 1 data (our face index 0)
+	for (int i = 0; i < 8; i++) {
+		if (i < glob_colors_cam_1.size()) {
+			cube_state[front_indices[i]] = glob_colors_cam_1[i]; // Front is 1st face for cam1
+		}
+	}
+	
+	// Fill Down face from Camera 2 data (our face index 2)
+	for (int i = 0; i < 8; i++) {
+		if ((16 + i) < glob_colors_cam_2.size()) {
+			cube_state[down_indices[i]] = glob_colors_cam_2[16 + i]; // Down is 3rd face for cam2
+		}
+	}
+	
+	// Fill Left face from Camera 2 data (our face index 1)
+	for (int i = 0; i < 8; i++) {
+		if ((8 + i) < glob_colors_cam_2.size()) {
+			cube_state[left_indices[i]] = glob_colors_cam_2[8 + i]; // Left is 2nd face for cam2
+		}
+	}
+	
+	// Fill Back face from Camera 2 data (our face index 0)
+	for (int i = 0; i < 8; i++) {
+		if (i < glob_colors_cam_2.size()) {
+			cube_state[back_indices[i]] = glob_colors_cam_2[i]; // Back is 1st face for cam2
+		}
+	}
+	
+	// Fill in hardcoded center pieces in Kociemba order
+	cube_state[4] = 'W';   // Up center
+	cube_state[13] = 'G';  // Right center
+	cube_state[22] = 'R';  // Front center
+	cube_state[31] = 'Y';  // Down center
+	cube_state[40] = 'B';  // Left center
+	cube_state[49] = 'O';  // Back center
+	
+	return cube_state;
+}
+
 std::string generateSolverString() {
 	// Generate cube state string for solving algorithms (54 characters)
 	// Standard format: Front, Right, Up, Back, Left, Down faces
@@ -1149,6 +1238,26 @@ std::string generateSolverString() {
 }
 
 
+std::string convertKociembaToFaces(const std::string& kociemba_colors) {
+	// Convert Kociemba color format to face format
+	// Kociemba expects: URFDLB order with colors converted to face names
+	std::string face_string = kociemba_colors;
+	
+	for (char& c : face_string) {
+		switch (c) {
+			case 'W': c = 'U'; break; // White -> Up
+			case 'G': c = 'R'; break; // Green -> Right  
+			case 'R': c = 'F'; break; // Red -> Front
+			case 'Y': c = 'D'; break; // Yellow -> Down
+			case 'B': c = 'L'; break; // Blue -> Left
+			case 'O': c = 'B'; break; // Orange -> Back
+			case 'N': c = 'N'; break; // Unknown stays unknown
+		}
+	}
+	
+	return face_string;
+}
+
 std::string convertToFRUBLD(const std::string& rgbygo_string) {
 	// Convert from RGBYGO color format to FRUBLD face format
 	// Standard cube: F=R, R=G, U=W, B=O, L=B, D=Y
@@ -1172,13 +1281,17 @@ std::string convertToFRUBLD(const std::string& rgbygo_string) {
 void printSolverFormat() {
 	std::string cube_state = generateSolverString();
 	std::string frubld_state = convertToFRUBLD(cube_state);
+	std::string kociemba_colors = generateKociembaString();
+	std::string kociemba_faces = convertKociembaToFaces(kociemba_colors);
 	
 	std::cout << "\n=== Cube State for Solver ===" << std::endl;
 	
 	std::cout << "\nColor format (RGWYBO): " << cube_state << std::endl;
-	std::cout << "Face format (FRUBLD):  " << frubld_state << std::endl;
+	std::cout << "Standard format (FRUBLD): " << frubld_state << std::endl;
+	std::cout << "Kociemba colors (URFDLB): " << kociemba_colors << std::endl;
+	std::cout << "Kociemba faces (URFDLB):  " << kociemba_faces << std::endl;
 	
-	std::cout << "\nFace-by-face breakdown (Color format):" << std::endl;
+	std::cout << "\nFace-by-face breakdown (Standard FRUBLD):" << std::endl;
 	const char* face_labels[] = {"Front", "Right", "Up", "Back", "Left", "Down"};
 	
 	for (int face = 0; face < 6; face++) {
@@ -1189,43 +1302,18 @@ void printSolverFormat() {
 		std::cout << std::endl;
 	}
 	
-	// Kociemba validation checks
-	std::cout << "\n=== Kociemba Validation Checks ===" << std::endl;
+	std::cout << "\nKociemba face breakdown (URFDLB order):" << std::endl;
+	const char* kociemba_labels[] = {"Up", "Right", "Front", "Down", "Left", "Back"};
 	
-	// Check 1: Exactly 54 characters
-	std::cout << "String length: " << frubld_state.length() << " (should be 54)" << std::endl;
-	
-	// Check 2: Only valid characters (F, R, U, B, L, D)
-	bool valid_chars = true;
-	for (char c : frubld_state) {
-		if (c != 'F' && c != 'R' && c != 'U' && c != 'B' && c != 'L' && c != 'D' && c != 'N') {
-			valid_chars = false;
-			break;
+	for (int face = 0; face < 6; face++) {
+		std::cout << kociemba_labels[face] << " face: ";
+		for (int pos = 0; pos < 9; pos++) {
+			std::cout << kociemba_faces[face * 9 + pos];
 		}
-	}
-	std::cout << "Valid characters: " << (valid_chars ? "✓" : "✗") << std::endl;
-	
-	// Check 3: Exactly 9 of each face character
-	std::map<char, int> face_counts;
-	for (char c : frubld_state) {
-		face_counts[c]++;
+		std::cout << std::endl;
 	}
 	
-	std::cout << "Character counts:" << std::endl;
-	for (auto& pair : face_counts) {
-		std::cout << "  " << pair.first << ": " << pair.second << " (should be 9)" << std::endl;
-	}
-	
-	// Check 4: Centers must be F, R, U, B, L, D respectively
-	std::cout << "Center pieces:" << std::endl;
-	std::cout << "  Front center (pos 4): " << frubld_state[4] << " (should be F)" << std::endl;
-	std::cout << "  Right center (pos 13): " << frubld_state[13] << " (should be R)" << std::endl;
-	std::cout << "  Up center (pos 22): " << frubld_state[22] << " (should be U)" << std::endl;
-	std::cout << "  Back center (pos 31): " << frubld_state[31] << " (should be B)" << std::endl;
-	std::cout << "  Left center (pos 40): " << frubld_state[40] << " (should be L)" << std::endl;
-	std::cout << "  Down center (pos 49): " << frubld_state[49] << " (should be D)" << std::endl;
-	
-	std::cout << "\n💡 Use the 'Face format (FRUBLD)' string for Kociemba!" << std::endl;
+	std::cout << "\n💡 Use the 'Kociemba faces (URFDLB)' string for Kociemba solver!" << std::endl;
 }
 
 void visual_debug_detection() {
@@ -1375,6 +1463,130 @@ void visual_debug_detection() {
 	std::cout << "Visual debug mode closed." << std::endl;
 }
 
+void test_calibrated_positions() {
+	if (!camera_1 || !camera_2) {
+		std::cerr << "Cameras not initialized!" << std::endl;
+		return;
+	}
+	
+	// Check if position files exist
+	if (points_cam_1.empty() || points_cam_2.empty()) {
+		std::cerr << "No calibration points loaded. Please run position calibration first." << std::endl;
+		return;
+	}
+	
+	cv::namedWindow("Test Camera 1", cv::WINDOW_NORMAL);
+	cv::namedWindow("Test Camera 2", cv::WINDOW_NORMAL);
+	cv::resizeWindow("Test Camera 1", 640, 480);
+	cv::resizeWindow("Test Camera 2", 640, 480);
+	cv::moveWindow("Test Camera 1", 50, 50);
+	cv::moveWindow("Test Camera 2", 720, 50);
+	
+	std::cout << "\n=== Test Calibrated Positions ===" << std::endl;
+	std::cout << "This shows numbered circles on your calibrated points." << std::endl;
+	std::cout << "Verify the numbers match the clicking order you used:" << std::endl;
+	std::cout << "Camera 1: Front(1-8), Right(9-16), Up(17-24)" << std::endl;
+	std::cout << "Camera 2: Back(1-8), Left(9-16), Down(17-24)" << std::endl;
+	std::cout << "Controls: ESC/Q = Quit" << std::endl;
+	
+	while (true) {
+		cv::Mat frame1, frame2, display1, display2;
+		
+		// Capture frames
+		camera_1->capture(frame1);
+		camera_2->capture(frame2);
+		
+		if (frame1.empty() || frame2.empty()) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			continue;
+		}
+		
+		display1 = frame1.clone();
+		display2 = frame2.clone();
+		
+		// Draw numbered circles for Camera 1 points
+		for (int i = 0; i < points_cam_1.size(); i++) {
+			cv::Point pt = points_cam_1[i];
+			
+			// Different colors for different faces
+			cv::Scalar color;
+			std::string face_name;
+			if (i < 8) { 
+				color = cv::Scalar(0, 0, 255); // Red for Front
+				face_name = "F";
+			} else if (i < 16) { 
+				color = cv::Scalar(0, 255, 0); // Green for Right
+				face_name = "R";
+			} else { 
+				color = cv::Scalar(255, 255, 255); // White for Up
+				face_name = "U";
+			}
+			
+			// Draw circle and number
+			cv::circle(display1, pt, 15, color, 2);
+			cv::putText(display1, std::to_string(i + 1), 
+					   cv::Point(pt.x - 10, pt.y + 5),
+					   cv::FONT_HERSHEY_SIMPLEX, 0.6, color, 2);
+			
+			// Add face label near first point of each face
+			if (i == 0 || i == 8 || i == 16) {
+				cv::putText(display1, face_name + " face", 
+						   cv::Point(pt.x + 20, pt.y),
+						   cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+			}
+		}
+		
+		// Draw numbered circles for Camera 2 points
+		for (int i = 0; i < points_cam_2.size(); i++) {
+			cv::Point pt = points_cam_2[i];
+			
+			// Different colors for different faces
+			cv::Scalar color;
+			std::string face_name;
+			if (i < 8) { 
+				color = cv::Scalar(0, 165, 255); // Orange for Back
+				face_name = "B";
+			} else if (i < 16) { 
+				color = cv::Scalar(255, 0, 0); // Blue for Left
+				face_name = "L";
+			} else { 
+				color = cv::Scalar(0, 255, 255); // Yellow for Down
+				face_name = "D";
+			}
+			
+			// Draw circle and number
+			cv::circle(display2, pt, 15, color, 2);
+			cv::putText(display2, std::to_string(i + 1), 
+					   cv::Point(pt.x - 10, pt.y + 5),
+					   cv::FONT_HERSHEY_SIMPLEX, 0.6, color, 2);
+			
+			// Add face label near first point of each face
+			if (i == 0 || i == 8 || i == 16) {
+				cv::putText(display2, face_name + " face", 
+						   cv::Point(pt.x + 20, pt.y),
+						   cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+			}
+		}
+		
+		// Add titles
+		cv::putText(display1, "Camera 1: Front(Red), Right(Green), Up(White)", 
+				   cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 2);
+		cv::putText(display2, "Camera 2: Back(Orange), Left(Blue), Down(Yellow)", 
+				   cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 2);
+		
+		cv::imshow("Test Camera 1", display1);
+		cv::imshow("Test Camera 2", display2);
+		
+		int key = cv::waitKey(30) & 0xFF;
+		if (key == 27 || key == 'q' || key == 'Q') { // ESC or Q
+			break;
+		}
+	}
+	
+	cv::destroyAllWindows();
+	std::cout << "Position test mode closed." << std::endl;
+}
+
 void debug_detected_colors() {
 	for (int i = 0; i < glob_colors_cam_1.size(); i++) {
 		std::cout << "Point " << i << ": " << glob_colors_cam_1[i] << std::endl;
@@ -1405,6 +1617,7 @@ int main() {
 	std::cout << "  j = Full detection (with custom LUT)" << std::endl;
 	std::cout << "  d = Show dual camera feed (positioning)" << std::endl;
 	std::cout << "  v = Visual debug detection (see detection points)" << std::endl;
+	std::cout << "  t = Test calibrated positions (verify click order)" << std::endl;
 	std::cout << "  a = Arduino-style detection test" << std::endl;
 	std::cout << "  q = Quit" << std::endl;
 	std::cout << "Enter choice: ";
@@ -1434,14 +1647,25 @@ int main() {
 			init_mat();
 			load_position("pos_1.txt", "pos_2.txt");
 
-			const auto dstart = std::chrono::high_resolution_clock::now();
-			benchmark();
-			const auto dend = std::chrono::high_resolution_clock::now();
-			std::chrono::duration<double> duration = dend - dstart;
-			std::cout << "Detection time: " << duration.count() << " seconds" << std::endl;
-			print_colors();
-			validateCube();
-			printSolverFormat();
+			for (int attempt = 1; attempt <= 3; attempt++) {
+				const auto dstart = std::chrono::high_resolution_clock::now();
+				benchmark();
+				const auto dend = std::chrono::high_resolution_clock::now();
+				std::chrono::duration<double> duration = dend - dstart;
+				
+				bool is_valid = validateCube();
+				
+				if (is_valid) {
+					std::cout << "✓ Valid cube state achieved on attempt " << attempt << "!" << std::endl;
+					std::cout << "Detection time: " << duration.count() << " seconds" << std::endl;
+					printSolverFormat();
+					break;
+				} else if (attempt == 3) {
+					std::cout << "Failed to get valid cube state after 3 attempts." << std::endl;
+					std::cout << "Detection time: " << duration.count() << " seconds" << std::endl;
+					printSolverFormat();
+				}
+			}
 		}
 		else if (k == 'j') {
 			std::cout << "\n=== Full Detection Mode ===" << std::endl;
@@ -1450,10 +1674,19 @@ int main() {
 			load_position("pos_1.txt", "pos_2.txt");
 			load_lut_from_file("range.txt");
 
-			parallel_benchmark();
-			debug_detected_colors();
-			validateCube();
-			printSolverFormat();
+			for (int attempt = 1; attempt <= 3; attempt++) {
+				parallel_benchmark();
+				bool is_valid = validateCube();
+				
+				if (is_valid) {
+					std::cout << "✓ Valid cube state achieved on attempt " << attempt << "!" << std::endl;
+					printSolverFormat();
+					break;
+				} else if (attempt == 3) {
+					std::cout << "Failed to get valid cube state after 3 attempts." << std::endl;
+					printSolverFormat();
+				}
+			}
 		}
 		else if (k == 'd') {
 			std::cout << "\n=== Dual Camera Display Mode ===" << std::endl;
@@ -1473,6 +1706,12 @@ int main() {
 			load_lut_from_file("range.txt");
 			
 			visual_debug_detection();
+		}
+		else if (k == 't') {
+			std::cout << "\n=== Test Calibrated Positions Mode ===" << std::endl;
+			load_position("pos_1.txt", "pos_2.txt");
+			
+			test_calibrated_positions();
 		}
 		else if (k == 'a') {
 			std::cout << "\n=== Arduino-Style Detection Test ===" << std::endl;

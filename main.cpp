@@ -87,15 +87,128 @@ struct ColorRange {
 
 static const ColorRange default_ranges[] = {
     {0, 179, 0, 50, 150, 255},     // White
-    {0, 10, 80, 255, 80, 255},     // Red (part 1)
+    {0, 10, 80, 255, 80, 255},     // Red (lower range: 0-10)
     {9, 20, 100, 255, 100, 255},   // Orange
     {21, 35, 80, 255, 120, 255},   // Yellow
     {45, 75, 60, 255, 60, 255},    // Green
     {100, 125, 80, 255, 80, 255}   // Blue
 };
 
+// Red high range for wraparound (170-179)
+static const ColorRange red_high_range = {170, 179, 80, 255, 80, 255};
+
 // Callback functions
 static void on_trackbar(int, void*) {}
+
+// Function to calibrate red wraparound range (170-179)
+static void calibrateRedWraparound(PS3EyeCamera* camera, std::ofstream& outfile) {
+    std::cout << "\n=== Red Wraparound Calibration (170-179 hue range) ===" << std::endl;
+    std::cout << "This calibrates the high hue range for red color detection." << std::endl;
+    std::cout << "Hold the red face to the camera and adjust ranges." << std::endl;
+    std::cout << "Controls: 's' = Save, 'r' = Reset to defaults, 'q' = Skip" << std::endl;
+    
+    // Set initial values for red high range
+    h_min = red_high_range.h_min;
+    h_max = red_high_range.h_max;
+    s_min = red_high_range.s_min;
+    s_max = red_high_range.s_max;
+    v_min = red_high_range.v_min;
+    v_max = red_high_range.v_max;
+    
+    // Update trackbars
+    cv::setTrackbarPos("H_MIN", "Controls", h_min);
+    cv::setTrackbarPos("H_MAX", "Controls", h_max);
+    cv::setTrackbarPos("S_MIN", "Controls", s_min);
+    cv::setTrackbarPos("S_MAX", "Controls", s_max);
+    cv::setTrackbarPos("V_MIN", "Controls", v_min);
+    cv::setTrackbarPos("V_MAX", "Controls", v_max);
+    
+    while (true) {
+        cv::Mat frame, hsv_frame, mask, preview;
+        
+        camera->capture(frame);
+        if (frame.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            continue;
+        }
+        
+        cv::cvtColor(frame, hsv_frame, cv::COLOR_BGR2HSV);
+        
+        // Create mask from trackbar values
+        cv::Scalar lower_bound(h_min, s_min, v_min);
+        cv::Scalar upper_bound(h_max, s_max, v_max);
+        cv::inRange(hsv_frame, lower_bound, upper_bound, mask);
+        
+        // Create preview showing detected pixels
+        cv::bitwise_and(frame, frame, preview, mask);
+        
+        // Scale up the images for better visibility
+        cv::Mat frame_big, mask_big, preview_big;
+        cv::resize(frame, frame_big, cv::Size(640, 480));
+        cv::resize(mask, mask_big, cv::Size(640, 480));
+        cv::resize(preview, preview_big, cv::Size(640, 480));
+        
+        // Convert mask to 3-channel for concatenation
+        cv::Mat mask_colored;
+        cv::cvtColor(mask_big, mask_colored, cv::COLOR_GRAY2BGR);
+        
+        // Combine all three views horizontally
+        cv::Mat combined_display;
+        cv::hconcat(frame_big, mask_colored, combined_display);
+        cv::Mat temp;
+        cv::hconcat(combined_display, preview_big, temp);
+        combined_display = temp;
+        
+        // Add text labels
+        cv::putText(combined_display, "Red Wraparound (170-179)", cv::Point(10, 30),
+                   cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+        cv::putText(combined_display, "Original", cv::Point(10, 460),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+        cv::putText(combined_display, "Mask", cv::Point(650, 460),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+        cv::putText(combined_display, "Detected", cv::Point(1290, 460),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+        
+        // Show current HSV ranges
+        std::string range_text = "H:" + std::to_string(h_min) + "-" + std::to_string(h_max) +
+                               " S:" + std::to_string(s_min) + "-" + std::to_string(s_max) +
+                               " V:" + std::to_string(v_min) + "-" + std::to_string(v_max);
+        cv::putText(combined_display, range_text, cv::Point(10, 70),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 2);
+        
+        cv::imshow("Color Calibration", combined_display);
+        
+        int key = cv::waitKey(30) & 0xFF;
+        if (key == 's') {
+            // Save the red wraparound range
+            outfile << "R2 " << h_min << " " << h_max << " "
+                    << s_min << " " << s_max << " " << v_min << " " << v_max << std::endl;
+            std::cout << "Red wraparound range saved: H(" << h_min << "-" << h_max
+                     << ") S(" << s_min << "-" << s_max << ") V(" << v_min << "-" << v_max << ")" << std::endl;
+            break;
+        }
+        if (key == 'r') {
+            std::cout << "Reset to default red wraparound range" << std::endl;
+            h_min = red_high_range.h_min;
+            h_max = red_high_range.h_max;
+            s_min = red_high_range.s_min;
+            s_max = red_high_range.s_max;
+            v_min = red_high_range.v_min;
+            v_max = red_high_range.v_max;
+            
+            cv::setTrackbarPos("H_MIN", "Controls", h_min);
+            cv::setTrackbarPos("H_MAX", "Controls", h_max);
+            cv::setTrackbarPos("S_MIN", "Controls", s_min);
+            cv::setTrackbarPos("S_MAX", "Controls", s_max);
+            cv::setTrackbarPos("V_MIN", "Controls", v_min);
+            cv::setTrackbarPos("V_MAX", "Controls", v_max);
+        }
+        if (key == 'q') {
+            std::cout << "Skipped red wraparound calibration" << std::endl;
+            break;
+        }
+    }
+}
 
 static void reset_to_defaults(int color_index) {
     if (color_index >= 0 && color_index < 6) {
@@ -232,6 +345,11 @@ void PS3EyeCamera::calibrateColors(const std::string& output_filename) {
                 cv::destroyAllWindows();
                 return;
             }
+        }
+        
+        // After calibrating the main red range (i==1), also calibrate red wraparound
+        if (i == 1) { // Red color index
+            calibrateRedWraparound(this, outfile);
         }
     }
 
@@ -733,10 +851,18 @@ void load_lut_from_file(const std::string& filename) {
 	std::string line;
 	while (std::getline(infile, line)) {
 		std::stringstream ss(line);
-		char color;
+		std::string color_str;
 		int h_min, h_max, s_min, s_max, v_min, v_max;
 
-		ss >> color >> h_min >> h_max >> s_min >> s_max >> v_min >> v_max;
+		ss >> color_str >> h_min >> h_max >> s_min >> s_max >> v_min >> v_max;
+
+		char color;
+		if (color_str == "R2") {
+			// Red wraparound range (170-179) - treat as regular red
+			color = 'R';
+		} else {
+			color = color_str[0];
+		}
 
 		// Handle red's hue wrap-around where h_min > h_max
 		bool red_wrap = (color == 'R' && h_min > h_max);
@@ -1720,6 +1846,146 @@ std::string solveWithMultipleOrientations(double& solve_time_ms) {
 	return "ERROR: No valid orientation found - all 24 orientations failed validation";
 }
 
+// Function to calibrate red wraparound range for dual cameras
+static void calibrateDualRedWraparound(PS3EyeCamera* camera1, PS3EyeCamera* camera2, std::ofstream& outfile) {
+    std::cout << "\n=== Dual Camera Red Wraparound Calibration (170-179 hue range) ===" << std::endl;
+    std::cout << "This calibrates the high hue range for red color detection." << std::endl;
+    std::cout << "Hold the red face to both cameras and adjust ranges." << std::endl;
+    std::cout << "Controls: 's' = Save, 'r' = Reset to defaults, 'q' = Skip" << std::endl;
+    
+    // Set initial values for red high range
+    h_min = red_high_range.h_min;
+    h_max = red_high_range.h_max;
+    s_min = red_high_range.s_min;
+    s_max = red_high_range.s_max;
+    v_min = red_high_range.v_min;
+    v_max = red_high_range.v_max;
+    
+    // Update trackbars
+    cv::setTrackbarPos("H_MIN", "Controls", h_min);
+    cv::setTrackbarPos("H_MAX", "Controls", h_max);
+    cv::setTrackbarPos("S_MIN", "Controls", s_min);
+    cv::setTrackbarPos("S_MAX", "Controls", s_max);
+    cv::setTrackbarPos("V_MIN", "Controls", v_min);
+    cv::setTrackbarPos("V_MAX", "Controls", v_max);
+    
+    while (true) {
+        cv::Mat frame1, frame2, hsv1, hsv2, mask1, mask2, preview1, preview2;
+        
+        // Capture from both cameras
+        if (camera1) camera1->capture(frame1);
+        if (camera2) camera2->capture(frame2);
+        
+        if (frame1.empty() || frame2.empty()) {
+            std::cout << "Warning: Could not capture from cameras" << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            continue;
+        }
+        
+        // Convert to HSV
+        cv::cvtColor(frame1, hsv1, cv::COLOR_BGR2HSV);
+        cv::cvtColor(frame2, hsv2, cv::COLOR_BGR2HSV);
+        
+        // Create masks from trackbar values
+        cv::Scalar lower_bound(h_min, s_min, v_min);
+        cv::Scalar upper_bound(h_max, s_max, v_max);
+        cv::inRange(hsv1, lower_bound, upper_bound, mask1);
+        cv::inRange(hsv2, lower_bound, upper_bound, mask2);
+        
+        // Create preview showing detected pixels
+        cv::bitwise_and(frame1, frame1, preview1, mask1);
+        cv::bitwise_and(frame2, frame2, preview2, mask2);
+        
+        // Resize all images to fit in 2x2 grid (280x200 each)
+        cv::Size grid_size(280, 200);
+        cv::Mat frame1_small, frame2_small, mask1_small, mask2_small;
+        cv::Mat preview1_small, preview2_small;
+        
+        cv::resize(frame1, frame1_small, grid_size);
+        cv::resize(frame2, frame2_small, grid_size);
+        cv::resize(preview1, preview1_small, grid_size);
+        cv::resize(preview2, preview2_small, grid_size);
+        
+        // Convert masks to 3-channel for display
+        cv::Mat mask1_colored, mask2_colored;
+        cv::resize(mask1, mask1_small, grid_size);
+        cv::resize(mask2, mask2_small, grid_size);
+        cv::cvtColor(mask1_small, mask1_colored, cv::COLOR_GRAY2BGR);
+        cv::cvtColor(mask2_small, mask2_colored, cv::COLOR_GRAY2BGR);
+        
+        // Create 2x2 grid layout
+        cv::Mat top_row, bottom_row, grid_display;
+        cv::hconcat(frame1_small, frame2_small, top_row);
+        cv::hconcat(mask1_colored, mask2_colored, bottom_row);
+        cv::vconcat(top_row, bottom_row, grid_display);
+        
+        // Add some spacing for controls at bottom
+        cv::Mat final_display;
+        cv::Mat control_area = cv::Mat::zeros(280, 560, CV_8UC3); // Space for controls and info
+        cv::vconcat(grid_display, control_area, final_display);
+        
+        // Add labels to each quadrant
+        cv::putText(final_display, "Camera 1 - Original", cv::Point(10, 20),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+        cv::putText(final_display, "Camera 2 - Original", cv::Point(290, 20),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+        cv::putText(final_display, "Camera 1 - Mask", cv::Point(10, 220),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+        cv::putText(final_display, "Camera 2 - Mask", cv::Point(290, 220),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+        
+        // Add current face info
+        cv::putText(final_display, "Red Wraparound (170-179)",
+                   cv::Point(10, 450), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+        cv::putText(final_display, "Hold red face to both cameras",
+                   cv::Point(10, 480), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 255), 2);
+        
+        // Show current HSV ranges
+        std::string range_text = "H:" + std::to_string(h_min) + "-" + std::to_string(h_max) +
+                               " S:" + std::to_string(s_min) + "-" + std::to_string(s_max) +
+                               " V:" + std::to_string(v_min) + "-" + std::to_string(v_max);
+        cv::putText(final_display, range_text, cv::Point(10, 520),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 2);
+        
+        // Add control instructions
+        cv::putText(final_display, "Controls: S=Save, R=Reset, Q=Skip",
+                   cv::Point(10, final_display.rows - 20),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 2);
+        
+        cv::imshow("Dual Camera Color Calibration", final_display);
+        
+        int key = cv::waitKey(30) & 0xFF;
+        if (key == 's' || key == 'S') {
+            // Save the red wraparound range
+            outfile << "R2 " << h_min << " " << h_max << " "
+                    << s_min << " " << s_max << " " << v_min << " " << v_max << std::endl;
+            std::cout << "Red wraparound range saved: H(" << h_min << "-" << h_max
+                     << ") S(" << s_min << "-" << s_max << ") V(" << v_min << "-" << v_max << ")" << std::endl;
+            break;
+        }
+        if (key == 'r' || key == 'R') {
+            std::cout << "Reset to default red wraparound range" << std::endl;
+            h_min = red_high_range.h_min;
+            h_max = red_high_range.h_max;
+            s_min = red_high_range.s_min;
+            s_max = red_high_range.s_max;
+            v_min = red_high_range.v_min;
+            v_max = red_high_range.v_max;
+            
+            cv::setTrackbarPos("H_MIN", "Controls", h_min);
+            cv::setTrackbarPos("H_MAX", "Controls", h_max);
+            cv::setTrackbarPos("S_MIN", "Controls", s_min);
+            cv::setTrackbarPos("S_MAX", "Controls", s_max);
+            cv::setTrackbarPos("V_MIN", "Controls", v_min);
+            cv::setTrackbarPos("V_MAX", "Controls", v_max);
+        }
+        if (key == 'q' || key == 'Q') {
+            std::cout << "Skipped dual camera red wraparound calibration" << std::endl;
+            break;
+        }
+    }
+}
+
 void dualCameraColorCalibration(PS3EyeCamera* camera1, PS3EyeCamera* camera2, const std::string& output_filename) {
 	std::ofstream outfile(output_filename, std::ios::trunc); // Overwrite file
 	if (!outfile.is_open()) {
@@ -1863,6 +2129,11 @@ void dualCameraColorCalibration(PS3EyeCamera* camera1, PS3EyeCamera* camera2, co
 				cv::destroyWindow("Controls");
 				return;
 			}
+		}
+		
+		// After calibrating the main red range (i==1), also calibrate red wraparound
+		if (i == 1) { // Red color index
+			calibrateDualRedWraparound(camera1, camera2, outfile);
 		}
 	}
 
